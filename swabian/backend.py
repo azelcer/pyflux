@@ -23,6 +23,7 @@ from dataclasses import dataclass as _dataclass
 
 from drivers.minflux_measurement import MinfluxMeasurement
 from datetime import datetime
+from time import time
 
 _lgr = _lgn.getLogger(__name__)
 _lgr.setLevel(_lgn.DEBUG)
@@ -128,7 +129,7 @@ class TCSPC_Backend(metaclass=_Singleton):
     class _Reporter(_QObject):
         sgnl_measure_init = _pyqtSignal(str)
         sgnl_measure_end = _pyqtSignal()
-        sgnl_new_data = _pyqtSignal(object, int, object, object)
+        sgnl_new_data = _pyqtSignal(object, object, object, object)
 
     _TCSPC_measurement = None
     _measurementGroup = None
@@ -180,6 +181,7 @@ class TCSPC_Backend(metaclass=_Singleton):
             return False
         sorted_indexes = np.argsort(self.iinfo.shutter_delays)
         self._shutter_delays = [self.iinfo.shutter_delays[idx] for idx in sorted_indexes]
+        self._accumulated_data = np.zeros((4,), np.int64)
         if PSF and PSF_info:
             _lgr.info("Starting measurement with location")
             self._PSF = PSF[sorted_indexes]
@@ -210,6 +212,9 @@ class TCSPC_Backend(metaclass=_Singleton):
             [self.iinfo.tick_channel]
             )
         self._reporter.sgnl_measure_init.emit(self.currentfname)
+        with open(self.currentfname + "t_start" + '.txt', "wt") as fd:
+            fd.write(str(time()))
+
         if acq_time_s:
             self._measurementGroup.startFor(int(acq_time_s * 1E12))
         else:
@@ -217,14 +222,17 @@ class TCSPC_Backend(metaclass=_Singleton):
 
     def report(self, delta_t: np.ndarray, period_length: int, bins: np.ndarray, pos: tuple):
         """Receive data from Swabian driver and report."""
+        new_pos = self._NOPLACE
         if self._locator:
             try:
-                new_pos = self._locator(bins)[1]
+                self._accumulated_data += bins
+                if self._accumulated_data.sum() >= 400:
+                    new_pos = self._locator(bins)[1]
+                    self._accumulated_data[:] = 0
+                # new_pos = self._locator(bins)[1]
             except Exception as e:
                 _lgr.error("Excepción %s reportando data: %s", type(e), e)
                 self.stop_measure()
-        else:
-            new_pos = self._NOPLACE
         self._reporter.sgnl_new_data.emit(delta_t, period_length, bins, new_pos)
 
     def stop_measure(self) -> bool:

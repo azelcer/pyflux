@@ -12,8 +12,6 @@ import numba
 import time
 import logging as _lgn
 
-_MAX_EVENTS = 131072
-_PERIOD = int(50E3)
 
 _lgr = _lgn.getLogger(__name__)
 
@@ -75,7 +73,7 @@ class MinfluxMeasurement(TimeTagger.CustomMeasurement):
         """Reset."""
         # The lock is already acquired within the backend.
         self._last_time = 0
-        self._delays = np.empty(self._max_events, dtype=np.int32)
+        self._delays = np.empty(self._max_events, dtype=np.int64)
         self._bins = np.zeros((4,), dtype=np.int64)
 
     def on_start(self):
@@ -91,9 +89,9 @@ class MinfluxMeasurement(TimeTagger.CustomMeasurement):
     @staticmethod
     @numba.jit((numba.uint64)(
         numba.from_dtype(TimeTagger.CustomMeasurement.INCOMING_TAGS_DTYPE)[:],
-        numba.int32[:], numba.int64, numba.int64,
+        numba.int64[:], numba.int64, numba.int64,
         numba.int64[:]),
-        nopython=True, nogil=True)
+        nopython=True, nogil=True, boundscheck=True)
     def process_tags(tags: np.ndarray, data: np.ndarray,
                      APD_channel: int, laser_channel: int,
                      errors: np.ndarray):
@@ -122,8 +120,8 @@ class MinfluxMeasurement(TimeTagger.CustomMeasurement):
         return last_pos
 
     @staticmethod
-    @numba.jit((numba.int32[:], numba.int64[:], numba.int64[:]),
-               nopython=True, nogil=True)  # , boundscheck=True)
+    @numba.jit((numba.int64[:], numba.int64[:], numba.int64[:]),
+               nopython=True, nogil=True, boundscheck=True)
     def process_delays(data: np.ndarray, delays, bins):
         """Bin time differences in data, return number of records.
 
@@ -174,13 +172,11 @@ class MinfluxMeasurement(TimeTagger.CustomMeasurement):
             errors)
         if errors[0]:
             _lgr.error("Hubo %s errores", errors[0])
-        # TODO: usar delta-t = end_time - begin_time para normalizar.
         # TODO: pasar esta línea a numba
         # n_times = max(n_times, 100)  # usar los últimos 100 fotones.
         MinfluxMeasurement.process_delays(self._delays[:n_times],
                                           self.shutter_delays, self._bins)
-        self._cb(self._delays[:n_times].copy(), end_time-begin_time, self._bins.copy(), (0, 0))
-
+        self._cb(self._delays[:n_times].copy(), end_time - begin_time, self._bins.copy(), (0, 0))
 
 if __name__ == '__main__':
     delays = np.array([0, 2000, 12000, 25000])
