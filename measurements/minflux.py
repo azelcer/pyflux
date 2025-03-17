@@ -89,7 +89,7 @@ class Frontend(QtGui.QFrame):
         self.measType.addItems(self.measTypes)
 
         self.patternType = QtGui.QComboBox()
-        self.patternTypes = ['Row', 'Square', 'Triangle']
+        self.patternTypes = ['Row', 'Square', 'Triangle', 'Grid']
         self.patternType.addItems(self.patternTypes)
 
         self.lengthLabel = QtGui.QLabel('L [nm]')
@@ -209,12 +209,15 @@ class Backend(QtCore.QObject):
         if self.measType == 'Predefined positions':
             if self.patternType == 'Row':
                 self.pattern = np.array([[0, -l], [0, 0], [0, l]])
-            if self.patternType == 'Square':
+            elif self.patternType == 'Square':
                 self.pattern = np.array([[l/2, l/2], [l/2, -l/2],
                                         [-l/2, -l/2], [-l/2, l/2]])
-            if self.patternType == 'Triangle':
+            elif self.patternType == 'Triangle':
                 self.pattern = np.array([[0, (2/3)*h], [l/2, -(1/3)*h],
                                         [-l/2, -(1/3)*h]])
+            elif self.patternType == 'Grid':
+                vals = np.linspace(-l/2, l/2, 5)
+                self.pattern = np.array([(x, y) for y in vals for x in vals])
             self.n = np.shape(self.pattern)[0]
         else:
             self.pattern = np.array((0, 0,))
