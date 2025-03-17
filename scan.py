@@ -1540,16 +1540,18 @@ class Backend(QtCore.QObject):
         print("fwd parab analyt min: ", self.min_coords_fit_psfF_um)
         print("bck parab analyt min: ", self.min_coords_fit_psfB_um)
 
-        # now we take the aritmetic average
+        # now we take the weighted average
+        weightF = 0.35
         self.target_coords_inroi_um = (
-            (self.min_coords_fit_psfF_um[0] + self.min_coords_fit_psfB_um[0]) / 2,
-            (self.min_coords_fit_psfF_um[1] + self.min_coords_fit_psfB_um[1]) / 2,
+            (weightF * self.min_coords_fit_psfF_um[0] + (1 - weightF) * self.min_coords_fit_psfB_um[0]),
+            (weightF * self.min_coords_fit_psfF_um[1] + (1 - weightF) * self.min_coords_fit_psfB_um[1]),
         )
         print("target coords in roi:", self.target_coords_inroi_um)
+        self.z_i = tools.convert(self.adw.Get_FPar(72), 'UtoX')
         self.target_coords_abs_um = (
-            self.initialPos[0] + self.target_coords_inroi_um[0],
-            self.initialPos[1] + self.target_coords_inroi_um[1],
-            self.initialPos[2]
+            self.x_i + self.target_coords_inroi_um[0],
+            self.y_i + self.target_coords_inroi_um[1],
+            self.z_i
         )
         print("target coords abs", self.target_coords_abs_um)
         # moving to target point
@@ -1848,11 +1850,11 @@ class Backend(QtCore.QObject):
             self.z_i = tools.convert(self.adw.Get_FPar(72), 'UtoX')
             self.moveTo(self.x_i, self.y_i, self.z_i)
         elif self.scantype == 'xz':
-            self.y_i = tools.convert(self.adw.Get_FPar(71), 'UtoX')
+            #self.y_i = tools.convert(self.adw.Get_FPar(71), 'UtoX')
             self.moveTo(self.x_i, self.y_i + self.scanRange/2,
                         self.z_i - self.scanRange/2)
         elif self.scantype == 'yz':
-            self.x_i = tools.convert(self.adw.Get_FPar(70), 'UtoX')
+            #self.x_i = tools.convert(self.adw.Get_FPar(70), 'UtoX')
             self.moveTo(self.x_i + self.scanRange/2, self.y_i,
                         self.z_i - self.scanRange/2)
         else:
