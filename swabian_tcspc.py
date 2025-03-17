@@ -62,7 +62,7 @@ class TCSPCFrontend(QtWidgets.QFrame):
     _localizations_x = np.full((_MAX_SAMPLES,), 0)
     _localizations_y = np.full((_MAX_SAMPLES,), 0)
     _shifts = [(0, 0),]
-    _intensities = np.zeros((4, _MAX_SAMPLES,), dtype=np.int32)
+    _intensities = np.zeros((4, _MAX_SAMPLES,), dtype=np.float64)
     _PSF = None
     _config: PSFMetadata = None
     _pos_vline: pg.InfiniteLine = None
@@ -84,7 +84,8 @@ class TCSPCFrontend(QtWidgets.QFrame):
 
     def _init_data(self):
         self._hist_data = list(np.histogram([], range=(0, self.period), bins=_N_BINS))
-        self._intensities = np.zeros((4, _MAX_SAMPLES,), dtype=np.int32)
+        self._intensities = np.zeros((4, _MAX_SAMPLES,), dtype=np.float64)
+        self._intensities[:] = np.nan
         self._last_pos = 0
         self._localizations_x = np.full((_MAX_SAMPLES,), 0)
         self._localizations_y = np.full((_MAX_SAMPLES,), 0)
@@ -188,20 +189,20 @@ class TCSPCFrontend(QtWidgets.QFrame):
         _lgr.info("%s", metadata)
         self._config = metadata
 
-    @pyqtSlot(np.ndarray, int, np.ndarray, np.ndarray)
-    def get_data(self, delta_t: np.ndarray, period_length: int, binned: np.array,
-                 new_pos: np.array):
+    @pyqtSlot(np.ndarray, object, np.ndarray, np.ndarray)
+    def get_data(self, delta_t: np.ndarray, period_length: int, binned: np.ndarray,
+                 new_pos: np.ndarray):
         """Receive new data and graph."""
         try:
             counts, bins = np.histogram(delta_t, range=(0, self.period), bins=_N_BINS)
             self._hist_data[0] += counts
             # self.histPlot.setData(bins[0:-1], self._hist_data[0])
             self._intensities[:, self._last_pos] = binned / period_length * 1E12  # Hz
-            # print(self._last_pos)
             must_update = (self._last_pos % 10 == 0)
             if must_update:
                 for plot, data in zip(self.intplots, self._intensities):
                     plot.setData(data)  # , connect="finite")
+                self.intplots[-1].setData(self._intensities.sum(axis=0))
                 self.trace_vline.setValue(self._last_pos)
                 self.histPlot.setData(bins[0:-1], counts)
             # si no mandamos PSFs nos vienen NAN en la localizacion
@@ -284,7 +285,7 @@ class TCSPCFrontend(QtWidgets.QFrame):
         self.tracePlot = self.dataWidget.addPlot(row=1, col=0, title="Time trace")
         self.tracePlot.setLabels(bottom=("s"), left=("counts"))
         self.intplots: list[pg.PlotDataItem] = [
-            self.tracePlot.plot(pen=_) for _ in range(4)
+            self.tracePlot.plot(pen=_) for _ in range(4 + 1)
         ]
         self.trace_vline = pg.InfiniteLine(0)
         self.tracePlot.addItem(self.trace_vline)
