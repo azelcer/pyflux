@@ -1864,6 +1864,10 @@ class Backend(QtCore.QObject):
 
     def liveview_start(self):
         # self.plot_scan()
+        # FIXME : provide a way to acces this data from takyaq
+        self._previous_lock_status = self.estabilizador._xy_stabilization
+        if (self._previous_lock_status):
+            self.estabilizador.disable_xy_stabilization()
         self.reset_position()
         if self.acquisitionMode == "timegated EBP meas":
             # open all shutters
@@ -1900,8 +1904,10 @@ class Backend(QtCore.QObject):
             tools.saveConfig(self, now, name)
         if self.acquisitionMode == "psf scan fit and move":
             self.psf_scanandfit_done.emit()
-        if self.acquisitionMode != "psf scan fit and move":    
+        if self.acquisitionMode != "psf scan fit and move":
             self.reset_position()
+        if (self._previous_lock_status):
+            self.estabilizador.enable_xy_stabilization()
 
     def update_view(self):
         """Procesa click del timer."""
