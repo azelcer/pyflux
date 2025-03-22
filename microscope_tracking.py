@@ -167,7 +167,6 @@ class Backend(QtCore.QObject):
         # self.minfluxWorker.shutterSignal.connect(self.xyzWorker.shutter_handler)
         self.minfluxWorker.saveConfigSignal.connect(self.scanWorker.saveConfigfile)
         # FIXME: chequear esta senal -> deber'ia hacer un save
-        
         # self.minfluxWorker.xyzEndSignal.connect(self.xyzWorker.get_end_measurement_signal)
 
     def setup_psf_connections(self):
@@ -246,11 +245,11 @@ class PiezoActuatorWrapper:
         self._xy_running = False
         self._z_running = False
         pos_zero = tools.convert(0, 'XtoU')
-        
+
         self._adw.Set_FPar(70, pos_zero)
         self._adw.Set_FPar(71, pos_zero)
         self._adw.Set_FPar(72, pos_zero)
-        
+
         # move to z = 10 µm
         self.set_position_xy(5, 5)
         self.set_position_z(10)
@@ -274,7 +273,7 @@ class PiezoActuatorWrapper:
         """Move to position xy specified in nanometers."""
         x_f = tools.convert(x / 1E3, 'XtoU')
         y_f = tools.convert(y / 1E3, 'XtoU')
-        if self._xy_running:    
+        if self._xy_running:
             self._adw.Set_FPar(self._FPAR_X, x_f)
             self._adw.Set_FPar(self._FPAR_Y, y_f)
         else:
@@ -319,6 +318,36 @@ class PiezoActuatorWrapper:
             self._z_running = True
         return True
 
+    def slow_move(self, x: float, y: float, z: float, max_speed: float = 5.):
+        """Se mueve *lentamente* a la posicion especificada.
+
+        Velocidad en nm/ms.
+        El codigo viejo usa 128 pixeles y pixeltime de 2000. Hace ruido feo al
+        ir a 3, 3, 10. Eso son 11.71 nm/ms y 39 nm/ms, y saltos de 23.43 y 78 nm
+        """
+        _MAX_STEP_SIZE = 20  # tamaño del salto maximo
+        _MIN_STEPS = 128  # minimo nro de steps
+        if self._z_running or self._xy_running:
+            print("Slow move no funciona durante la estabilizacion")
+            return
+        cx, cy, cz = self.get_position()
+        maxdist = max(abs(cx - x), abs(cy - y), abs(cz - z))
+        mintime = maxdist/max_speed  # tiempo minimo (ms)
+        minsteps = max(maxdist / _MAX_STEP_SIZE, _MIN_STEPS)
+        pixeltime = max(200, mintime/minsteps)
+        print(f"Slow move {pixeltime=}, {minsteps=}, {mintime}")
+        x_f = tools.convert(x / 1E3, 'XtoU')
+        y_f = tools.convert(y / 1E3, 'XtoU')
+        z_f = tools.convert(z / 1E3, 'XtoU')
+        self._adw.Set_Par(21, 128)
+        self._adw.Set_Par(22, 128)
+        self._adw.Set_Par(23, 128)
+        self._adw.Set_FPar(23, x_f)
+        self._adw.Set_FPar(24, y_f)
+        self._adw.Set_FPar(25, z_f)
+        self._adw.Set_FPar(26, tools.timeToADwin(pixeltime))
+        self._adw.Start_Process(2)
+
     def end_cb(self, tipo: takyaq.info_types.StabilizationType):
         if tipo == takyaq.info_types.StabilizationType.XY_stabilization:
             self._adw.Stop_Process(self._PROCESS_XY)
@@ -358,7 +387,7 @@ if __name__ == '__main__':
 
         gui = Frontend(stabilization_gui)
         worker = Backend(adw, diodelaser, stb)
-        
+
         gui.make_connection(worker)
         worker.make_connection(gui)
 
@@ -378,7 +407,7 @@ if __name__ == '__main__':
         worker.scanWorker.viewtimer.moveToThread(scanThread)
         worker.scanWorker.viewtimer.timeout.connect(worker.scanWorker.update_view)
         scanThread.start()
-        
+
         # Andor widefield thread
         # andorThread = QtCore.QThread()
         # worker.andorWorker.moveToThread(andorThread)
