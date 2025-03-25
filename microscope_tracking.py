@@ -261,6 +261,8 @@ class PiezoActuatorWrapper:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._adw.Stop_Process(self._PROCESS_XY)
         self._adw.Stop_Process(self._PROCESS_Z)
+        self.set_position_xy(0, 0)
+        self.set_position_z(0)
         return False
 
     def get_position(self) -> _Tuple[float, float, float]:
@@ -350,7 +352,7 @@ if __name__ == '__main__':
     adw = ADwin.ADwin(DEVICENUMBER, 1)
     scan.setupDevice(adw)
     camera_info = takyaq.info_types.CameraInfo(29.4, 52, 3.00)
-    controller = controllers.PIController2()
+    controller = controllers.PIController()
     with IDSWrapper() as camera, PiezoActuatorWrapper(adw) as piezo, stabilizer.Stabilizer(camera, piezo, camera_info, controller) as stb:
         stabilization_gui = PyQt_frontend.Frontend(camera, piezo, controller, camera_info, stb)
         stabilization_gui.setWindowTitle("Takyaq with PyQt frontend")

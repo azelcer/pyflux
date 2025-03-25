@@ -1205,6 +1205,7 @@ class Backend(QtCore.QObject):
         self.flipper_state = False
         self.laserstate = False
         self.estabilizador = estabilizador
+        self.acquisitionMode = ""
         
         self._TCSPC_backend = TCSPC_Backend()
 
@@ -2166,11 +2167,11 @@ class Backend(QtCore.QObject):
         
         # Go back to 0 position
 
-        x_0 = 0
-        y_0 = 0
-        z_0 = 0
+        # x_0 = 0
+        # y_0 = 0
+        # z_0 = 0
 
-        self.moveTo(x_0, y_0, z_0)
+        # self.moveTo(x_0, y_0, z_0)
         
 
 if __name__ == '__main__':

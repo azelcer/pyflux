@@ -219,7 +219,8 @@ def time_tags2delays(timestamps: _np.ndarray, channels: _np.ndarray,
             if rv[last_pos, 2] < 0:
                 rv[last_pos, 2] += period
             if rv[last_pos, 2] < 0:
-                print("Tiempo negativo", rv[last_pos]/period, ts, last_timestamp)
+                # print("Tiempo negativo", rv[last_pos]/period, ts, last_timestamp)
+                ...
             rv[last_pos, 1] = ts
             last_pos += 1
         elif chan == APD_channel:

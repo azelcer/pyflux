@@ -123,7 +123,7 @@ class MinFluxLocator:
         # maximum likelihood estimator for the position
         indrec = _np.unravel_index(_np.argmax(self.LTot, axis=None), self.LTot.shape)
 
-        pos_estimator = pos_estimator = self._idx2pos(indrec)
+        pos_estimator =  self._idx2pos(indrec)
         return indrec, pos_estimator, self.LTot
 
     def _numba_estimate(self, n):

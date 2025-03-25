@@ -32,7 +32,7 @@ _lgn.basicConfig(level=_lgn.INFO)
 _MAX_EVENTS = 131072
 _N_BINS = 50
 _MAX_SAMPLES = int(60*200)  # si es cada 5 ms son 200 por segundo
-
+_BRUSHES =  [pg.mkBrush(x % 256, (_MAX_SAMPLES - x) % 256, 0) for x in range(_MAX_SAMPLES)]
 
 @_dataclass
 class PSFMetadata:
@@ -87,8 +87,8 @@ class TCSPCFrontend(QtWidgets.QFrame):
         self._intensities = np.zeros((4, _MAX_SAMPLES,), dtype=np.float64)
         self._intensities[:] = np.nan
         self._last_pos = 0
-        self._localizations_x = np.full((_MAX_SAMPLES,), 0)
-        self._localizations_y = np.full((_MAX_SAMPLES,), 0)
+        self._localizations_x = np.full((_MAX_SAMPLES,), np.nan)
+        self._localizations_y = np.full((_MAX_SAMPLES,), np.nan)
         self._shifts = [(0, 0),]
 
     def start_measurement(self):
@@ -97,7 +97,7 @@ class TCSPCFrontend(QtWidgets.QFrame):
             filename = self.filenameEdit.text()
         except Exception:
             filename = "lefilename"
-        self._backend.start_measure(filename, self._PSF, self._config)
+        self._backend.start_measure(filename, None, self._PSF, self._config)
 
     @pyqtSlot(str)
     def process_measurement_start(self, filename: str):
@@ -198,7 +198,7 @@ class TCSPCFrontend(QtWidgets.QFrame):
             self._hist_data[0] += counts
             # self.histPlot.setData(bins[0:-1], self._hist_data[0])
             self._intensities[:, self._last_pos] = binned / period_length * 1E12  # Hz
-            must_update = (self._last_pos % 10 == 0)
+            must_update = (self._last_pos % 50 == 0)
             if must_update:
                 for plot, data in zip(self.intplots, self._intensities):
                     plot.setData(data)  # , connect="finite")
@@ -206,8 +206,8 @@ class TCSPCFrontend(QtWidgets.QFrame):
                 self.trace_vline.setValue(self._last_pos)
                 self.histPlot.setData(bins[0:-1], counts)
             # si no mandamos PSFs nos vienen NAN en la localizacion
-            if not np.any(np.isnan(new_pos)):
-                self.add_localization(*new_pos, self._last_pos, must_update)
+            # if not np.any(np.isnan(new_pos)):
+            self.add_localization(*new_pos, self._last_pos, must_update)
 
             self._last_pos += 1
             if self._last_pos >= _MAX_SAMPLES:
@@ -296,7 +296,7 @@ class TCSPCFrontend(QtWidgets.QFrame):
             bottom=("X position", "nm"), left=("Y position", "nm")
         )
         self.posPlot: pg.PlotDataItem = self.posPlotItem.plot(
-            [], [], pen=None, symbolBrush=(255, 0, 0), symbolSize=5, symbolPen=None
+            [], [], pen=None, symbolBrush=_BRUSHES, symbolSize=5, symbolPen=None
             )
         # folder
         # TO DO: move this to backend

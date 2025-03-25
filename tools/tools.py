@@ -12,7 +12,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 from scipy.stats import norm, chi2
 import win32com.client
-
+from time import sleep
 
 def convert(x, key):
     
@@ -417,17 +417,23 @@ def cov_ellipse(cov, q=None, nsig=None, **kwargs):
     theta = np.degrees(np.arctan2(*vec[::, 0]))
     return w, h, theta
 
+
 def toggle_shutter(adwBoard, num, val):
     num = num - 1
     adwBoard.Set_Par(73, num)
-    if val is True:
+    if val:
         adwBoard.Set_Par(72, 1)
         adwBoard.Start_Process(7)
         #print('Shutter', str(num+1), 'opened')
-    if val is False:
+    else:
         adwBoard.Set_Par(72, 0)
         adwBoard.Start_Process(7)
-        #print('Shutter', str(num+1), 'closed')    
+        #print('Shutter', str(num+1), 'closed')
+    for _ in range(5):
+        if adwBoard.Process_Status(7) == 0:
+            break
+        sleep(0.010)
+
     
 def get_MiniLasEvoPort():
     

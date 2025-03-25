@@ -131,7 +131,8 @@ class MinfluxMeasurement(TimeTagger.CustomMeasurement):
         """
         bins[:] = 0
         for td in data:  # hardcoded para 4
-            # bins[3 - td // 12500] += 1
+            # bins[3 - ((td+4290) % 50000) // 12500] += 1
+            td = ((td+4290) % 50000)
             if td <= delays[3]:
                 bins[3] += 1
             elif td <= delays[2]:

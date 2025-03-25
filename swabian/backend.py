@@ -182,7 +182,7 @@ class TCSPC_Backend(metaclass=_Singleton):
         sorted_indexes = np.argsort(self.iinfo.shutter_delays)
         self._shutter_delays = [self.iinfo.shutter_delays[idx] for idx in sorted_indexes]
         self._accumulated_data = np.zeros((4,), np.int64)
-        if PSF and PSF_info:
+        if (PSF is not None) and (PSF_info is not None):
             _lgr.info("Starting measurement with location")
             self._PSF = PSF[sorted_indexes]
             # FIXME
