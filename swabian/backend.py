@@ -30,6 +30,7 @@ _lgr.setLevel(_lgn.DEBUG)
 
 
 _MAX_EVENTS = 131072
+_MAX_SAMPLES = int(60*200)  # si es cada 5 ms son 200 por segundo
 
 
 def change_stem(path: _plib.Path, new_stem: str):
@@ -129,15 +130,20 @@ class TCSPC_Backend(metaclass=_Singleton):
     class _Reporter(_QObject):
         sgnl_measure_init = _pyqtSignal(str)
         sgnl_measure_end = _pyqtSignal()
-        sgnl_new_data = _pyqtSignal(object, object, object, object)
+        # sgnl_new_data = _pyqtSignal(object, object, object, object)
 
     _TCSPC_measurement = None
     _measurementGroup = None
     _NOPLACE = np.full((2,), np.nan)
+    _last_data = np.empty((1,), dtype=np.int64)
+    _pos_data = np.full((_MAX_SAMPLES, 2), np.nan)
+    _next_pos_index = 0
+    _I_data = np.full((_MAX_SAMPLES, 4), np.nan)
+    _next_I_index = 0
     _reporter = _Reporter()
     sgnl_measure_init = _reporter.sgnl_measure_init
     sgnl_measure_end = _reporter.sgnl_measure_end
-    sgnl_new_data = _reporter.sgnl_new_data
+    # sgnl_new_data = _reporter.sgnl_new_data
 
     def __init__(self, *args, **kwargs):
         """Prepare device info."""
@@ -146,6 +152,7 @@ class TCSPC_Backend(metaclass=_Singleton):
         IInfo = _get_instrument_info()
         self.iinfo = IInfo
         self.open()
+        self._min_location_counts = 1700
 
     def __enter__(self):
         # self.open()
@@ -217,23 +224,40 @@ class TCSPC_Backend(metaclass=_Singleton):
 
         if acq_time_s:
             self._measurementGroup.startFor(int(acq_time_s * 1E12))
+            # FIXME ¿emitir end acá?
         else:
             self._measurementGroup.start()
 
     def report(self, delta_t: np.ndarray, period_length: int, bins: np.ndarray, pos: tuple):
-        """Receive data from Swabian driver and report."""
-        new_pos = self._NOPLACE
+        """Receive data from Swabian driver and fill the buffers.
+
+        TODO: deberia localizar el thread swabian, por eso está como parámetro.
+        """
+        # new_pos = self._NOPLACE
         if self._locator:
             try:
                 self._accumulated_data += bins
-                if self._accumulated_data.sum() >= 400:
-                    new_pos = self._locator(bins)[1]
+                if self._accumulated_data.sum() >= self._min_location_counts:
+                    new_pos = self._locator(self._accumulated_data)[1]
+                    self._pos_data[self._next_pos_index] = new_pos
                     self._accumulated_data[:] = 0
-                # new_pos = self._locator(bins)[1]
+                    self._next_pos_index += 1
+                    self._next_pos_index %= _MAX_SAMPLES
             except Exception as e:
-                _lgr.error("Excepción %s reportando data: %s", type(e), e)
+                _lgr.error("Excepción %s localizando: %s", type(e), e)
                 self.stop_measure()
-        self._reporter.sgnl_new_data.emit(delta_t, period_length, bins, new_pos)
+        self._I_data[self._next_I_index] = bins / period_length * 1E12
+        self._next_I_index += 1
+        self._next_I_index %= _MAX_SAMPLES
+        self._last_data = delta_t
+        # self._reporter.sgnl_new_data.emit(delta_t, period_length, bins, new_pos)
+
+    def get_data_buffers(self):
+        return self._pos_data, self._I_data
+
+    def get_last_data(self):
+        """reporta las últimas posiciones y delta-t."""
+        return self._next_pos_index, self._next_I_index, self._last_data
 
     def stop_measure(self) -> bool:
         """Stop measure.
