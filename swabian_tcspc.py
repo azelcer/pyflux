@@ -59,10 +59,10 @@ class TCSPCFrontend(QtWidgets.QFrame):
     measureSignal = pyqtSignal(np.ndarray, np.ndarray, np.ndarray)
 
     # Data
-    _localizations_x = np.full((_MAX_SAMPLES,), 0)
-    _localizations_y = np.full((_MAX_SAMPLES,), 0)
-    _shifts = [(0, 0),]
-    _intensities = np.zeros((4, _MAX_SAMPLES,), dtype=np.float64)
+    # _localizations_x = np.full((_MAX_SAMPLES,), 0)
+    # _localizations_y = np.full((_MAX_SAMPLES,), 0)
+    # _shifts = [(0, 0),]
+    # _intensities = np.zeros((4, _MAX_SAMPLES,), dtype=np.float64)
     _PSF = None
     _config: PSFMetadata = None
     _pos_vline: pg.InfiniteLine = None
@@ -78,7 +78,7 @@ class TCSPCFrontend(QtWidgets.QFrame):
 
         self._init_data()
         self.setup_gui()
-        self._backend.sgnl_new_data.connect(self.get_data)
+        # self._backend.sgnl_new_data.connect(self.get_data)
         self._backend.sgnl_measure_init.connect(self.process_measurement_start)
         self._backend.sgnl_measure_end.connect(self.process_measurement_stop)
         self._timer = QTimer()
@@ -109,7 +109,7 @@ class TCSPCFrontend(QtWidgets.QFrame):
         _lgr.info("Iniciando medida con archivo %s", filename)
         self._current_filename = filename
         self.filenameEdit.setText(filename)
-        self.clear_data()
+        self.clear_plots()
         self._init_data()
         self.measureButton.setEnabled(False)
         self._timer.start(200)  # ms
@@ -205,39 +205,20 @@ class TCSPCFrontend(QtWidgets.QFrame):
             for plot, data in zip(self.intplots, self._intensities):
                 plot.setData(data)  # , connect="finite")
             self.intplots[-1].setData(self._intensities.sum(axis=0))
-            self.trace_vline.setValue(self._last_pos)
+            self.trace_vline.setValue(I_idx)
             self.histPlot.setData(bins[0:-1], counts)
-            # si no mandamos PSFs nos vienen NAN en la localizacion
-            if not np.any(np.isnan(new_pos)):
-                self.add_localization(*new_pos, self._last_pos, must_update)
+            self.posPlot.setData(self._positions[0], self._positions[1])
 
-            self._last_pos += 1
-            if self._last_pos >= _MAX_SAMPLES:
-                self._last_pos = 0
         except Exception as e:
             _lgr.error("Excepción %s recibiendo la información: %s", type(e), e)
 
-    def add_localization(self, pos_x, pos_y, last_pos, update: bool):
-        """Receive a new localization from backend (_via_ callback)."""
-        self._localizations_x[last_pos] = pos_x  # + self._shifts[-1][0]
-        self._localizations_y[last_pos] = pos_y  # + self._shifts[-1][1]
-        if update:
-            self.posPlot.setData(self._localizations_x, self._localizations_y)
-
-    @pyqtSlot(float, float)
-    def get_shift(self, shift_x, shift_y):
-        """Receive a shift signal from backend."""
-        self._shifts.append((shift_x, shift_y,))
-        self._localizations.append([])
-
-    def clear_data(self):
-        """Clear all data and plots."""
+    def clear_plots(self):
+        """Clear all plots."""
         self.histPlot.clear()
         for p in self.intplots:
             p.clear()
 
         self.posPlot.clear()
-        self._init_data()
 
     def setup_gui(self):
         """Initialize the GUI."""
@@ -257,23 +238,10 @@ class TCSPCFrontend(QtWidgets.QFrame):
         self.fileWidget.setFixedHeight(180)
         self.fileWidget.setFixedWidth(250)
         # Buttons
-        # self.prepareButton = QtWidgets.QPushButton("Prepare TTTR")
         self.measureButton = QtWidgets.QPushButton("Measure TTTR")
         self.stopButton = QtWidgets.QPushButton("Stop")
-        # self.exportDataButton = QtWidgets.QPushButton("Export data")
 
         self.clearButton = QtWidgets.QPushButton("Clear data")
-        # TCSPC parameters labels and edits
-        # acqtimeLabel = QtWidgets.QLabel("Acquisition time [s]")
-        # self.acqtimeEdit = QtWidgets.QLineEdit("1")
-
-        # self.channel0Label = QtWidgets.QLabel("Input 0 (sync) [kHz]")
-        # self.channel0Value = QtWidgets.QLineEdit("")
-        # self.channel0Value.setReadOnly(True)
-
-        # self.channel1Label = QtWidgets.QLabel("Input 1 (APD) [kHz]")
-        # self.channel1Value = QtWidgets.QLineEdit("")
-        # self.channel1Value.setReadOnly(True)
 
         self.filenameEdit = QtWidgets.QLineEdit("filename")
 
@@ -282,7 +250,7 @@ class TCSPCFrontend(QtWidgets.QFrame):
             row=0, col=0, title="microTime histogram", stepMode=True, fillLevel=0,
         )
         self.histWidg.setLabels(bottom=("ps"), left=("counts"))
-        self.histPlot  = self.histWidg.plot()
+        self.histPlot = self.histWidg.plot()
 
         self.tracePlot = self.dataWidget.addPlot(row=1, col=0, title="Time trace")
         self.tracePlot.setLabels(bottom=("s"), left=("counts"))
@@ -327,7 +295,7 @@ class TCSPCFrontend(QtWidgets.QFrame):
         self.browseFolderButton.clicked.connect(self.load_folder)
         self.browsePSFButton.clicked.connect(self.load_PSF)
         self.browseConfigButton.clicked.connect(self.load_config)
-        self.clearButton.clicked.connect(self.clear_data)
+        self.clearButton.clicked.connect(self.clear_plots)
 
         # self.acqtimeEdit.textChanged.connect(self.emit_param)
 
@@ -341,18 +309,8 @@ class TCSPCFrontend(QtWidgets.QFrame):
         # param Widget layout
         subgrid = QtWidgets.QGridLayout()
         self.paramWidget.setLayout(subgrid)
-        # subgrid.addWidget(phParamTitle, 0, 0, 2, 3)
-        # subgrid.addWidget(acqtimeLabel, 2, 0)
-        # subgrid.addWidget(self.acqtimeEdit, 2, 1)
-        # subgrid.addWidget(self.channel0Label, 8, 0)
-        # subgrid.addWidget(self.channel0Value, 8, 1)
-        # subgrid.addWidget(self.channel1Label, 9, 0)
-        # subgrid.addWidget(self.channel1Value, 9, 1)
-
-        # subgrid.addWidget(self.exportDataButton, 16, 1)
 
         subgrid.addWidget(self.measureButton, 17, 0)
-        # subgrid.addWidget(self.prepareButton, 18, 0)
         subgrid.addWidget(self.stopButton, 17, 1)
         subgrid.addWidget(self.clearButton, 18, 1)
 
