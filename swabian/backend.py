@@ -136,9 +136,9 @@ class TCSPC_Backend(metaclass=_Singleton):
     _measurementGroup = None
     _NOPLACE = np.full((2,), np.nan)
     _last_data = np.empty((1,), dtype=np.int64)
-    _pos_data = np.full((_MAX_SAMPLES, 2), np.nan)
+    _pos_data = np.full((2, _MAX_SAMPLES), np.nan)
     _next_pos_index = 0
-    _I_data = np.full((_MAX_SAMPLES, 4), np.nan)
+    _I_data = np.full((4, _MAX_SAMPLES), np.nan)
     _next_I_index = 0
     _reporter = _Reporter()
     sgnl_measure_init = _reporter.sgnl_measure_init
@@ -239,24 +239,28 @@ class TCSPC_Backend(metaclass=_Singleton):
                 self._accumulated_data += bins
                 if self._accumulated_data.sum() >= self._min_location_counts:
                     new_pos = self._locator(self._accumulated_data)[1]
-                    self._pos_data[self._next_pos_index] = new_pos
+                    self._pos_data[: self._next_pos_index] = new_pos
                     self._accumulated_data[:] = 0
                     self._next_pos_index += 1
                     self._next_pos_index %= _MAX_SAMPLES
             except Exception as e:
                 _lgr.error("Excepción %s localizando: %s", type(e), e)
                 self.stop_measure()
-        self._I_data[self._next_I_index] = bins / period_length * 1E12
+        self._I_data[:, self._next_I_index] = bins / period_length * 1E12
         self._next_I_index += 1
         self._next_I_index %= _MAX_SAMPLES
         self._last_data = delta_t
         # self._reporter.sgnl_new_data.emit(delta_t, period_length, bins, new_pos)
 
     def get_data_buffers(self):
+        """Devuelve los buffers de posicion y de intensidad"""
         return self._pos_data, self._I_data
 
     def get_last_data(self):
-        """reporta las últimas posiciones y delta-t."""
+        """reporta los últimas indices y delta-t.
+
+        Devuelve idx pos, idx intensidades y array delta t
+        """
         return self._next_pos_index, self._next_I_index, self._last_data
 
     def stop_measure(self) -> bool:

@@ -13,7 +13,7 @@ import logging as _lgn
 
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore
-from PyQt5.QtCore import pyqtSignal, pyqtSlot
+from PyQt5.QtCore import pyqtSignal, pyqtSlot, QTimer
 from PyQt5.QtWidgets import QGroupBox
 from PyQt5 import QtWidgets
 import tools.swabiantools as _st
@@ -73,7 +73,7 @@ class TCSPCFrontend(QtWidgets.QFrame):
         # initial directory
         self.initialDir = r"C:\Data"
         self._backend = TCSPC_Backend()
-        # FIXME: for developing only   
+        # FIXME: for developing only
         self.period = self._backend.iinfo.period
 
         self._init_data()
@@ -81,15 +81,19 @@ class TCSPCFrontend(QtWidgets.QFrame):
         self._backend.sgnl_new_data.connect(self.get_data)
         self._backend.sgnl_measure_init.connect(self.process_measurement_start)
         self._backend.sgnl_measure_end.connect(self.process_measurement_stop)
+        self._timer = QTimer()
+        self._timer.timeout.connect(self.update_data)
 
     def _init_data(self):
         self._hist_data = list(np.histogram([], range=(0, self.period), bins=_N_BINS))
-        self._intensities = np.zeros((4, _MAX_SAMPLES,), dtype=np.float64)
-        self._intensities[:] = np.nan
-        self._last_pos = 0
-        self._localizations_x = np.full((_MAX_SAMPLES,), 0)
-        self._localizations_y = np.full((_MAX_SAMPLES,), 0)
-        self._shifts = [(0, 0),]
+        # self._intensities = np.zeros((4, _MAX_SAMPLES,), dtype=np.float64)
+        # self._intensities[:] = np.nan
+        # self._last_pos = 0
+        # self._localizations_x = np.full((_MAX_SAMPLES,), 0)
+        # self._localizations_y = np.full((_MAX_SAMPLES,), 0)
+        # self._shifts = [(0, 0),]
+        self._intensities, self._positions = self._backend.get_data_buffers()
+        self._last_I_index = self._last_pos_indes = 0
 
     def start_measurement(self):
         """Inicia la medida."""
@@ -108,6 +112,7 @@ class TCSPCFrontend(QtWidgets.QFrame):
         self.clear_data()
         self._init_data()
         self.measureButton.setEnabled(False)
+        self._timer.start(200)  # ms
 
     def stop_measurement(self):
         """Detiene la medida.
@@ -122,6 +127,7 @@ class TCSPCFrontend(QtWidgets.QFrame):
         Sin error checking por hora
         """
         self.measureButton.setEnabled(True)
+        self._timer.stop()
         _st.swabian2numpy(self._current_filename, self._backend.period,
                           self._backend.iinfo.APD_info[0].channel,
                           self._backend.iinfo.laser_channel,
@@ -189,22 +195,18 @@ class TCSPCFrontend(QtWidgets.QFrame):
         _lgr.info("%s", metadata)
         self._config = metadata
 
-    @pyqtSlot(np.ndarray, object, np.ndarray, np.ndarray)
-    def get_data(self, delta_t: np.ndarray, period_length: int, binned: np.ndarray,
-                 new_pos: np.ndarray):
-        """Receive new data and graph."""
+    def update_data(self):
+        """Receive update graphs."""
+        pos_idx, I_idx, delta_t = self._backend.get_last_data()
         try:
             counts, bins = np.histogram(delta_t, range=(0, self.period), bins=_N_BINS)
             self._hist_data[0] += counts
-            # self.histPlot.setData(bins[0:-1], self._hist_data[0])
-            self._intensities[:, self._last_pos] = binned / period_length * 1E12  # Hz
-            must_update = (self._last_pos % 10 == 0)
-            if must_update:
-                for plot, data in zip(self.intplots, self._intensities):
-                    plot.setData(data)  # , connect="finite")
-                self.intplots[-1].setData(self._intensities.sum(axis=0))
-                self.trace_vline.setValue(self._last_pos)
-                self.histPlot.setData(bins[0:-1], counts)
+
+            for plot, data in zip(self.intplots, self._intensities):
+                plot.setData(data)  # , connect="finite")
+            self.intplots[-1].setData(self._intensities.sum(axis=0))
+            self.trace_vline.setValue(self._last_pos)
+            self.histPlot.setData(bins[0:-1], counts)
             # si no mandamos PSFs nos vienen NAN en la localizacion
             if not np.any(np.isnan(new_pos)):
                 self.add_localization(*new_pos, self._last_pos, must_update)
