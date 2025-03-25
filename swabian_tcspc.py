@@ -201,7 +201,7 @@ class TCSPCFrontend(QtWidgets.QFrame):
         try:
             counts, bins = np.histogram(delta_t, range=(0, self.period), bins=_N_BINS)
             self._hist_data[0] += counts
-
+            # TODO: perform this during setup and just call "UpdateItems"
             for plot, data in zip(self.intplots, self._intensities):
                 plot.setData(data)  # , connect="finite")
             self.intplots[-1].setData(self._intensities.sum(axis=0))
