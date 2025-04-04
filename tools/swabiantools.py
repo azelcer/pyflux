@@ -40,6 +40,7 @@ def calibrate_period(
     test_time: int = int(1e12),
     return_data: bool = False,
     debug=False,
+    output_filename: str = None,
 ):
     """Calibrate trigger channel period.
 
@@ -57,6 +58,8 @@ def calibrate_period(
             If True returns both the period and the data
         debug: bool, default = False
             If True, connects the channel to the internal timer
+        output_filename: str | None, optional
+            output fiilename.
 
     Returns
     =======
@@ -67,15 +70,24 @@ def calibrate_period(
     tagger.setTriggerLevel(channel_number, signal_type.value.trigger_voltage)
     if signal_type.value.sense is SignalEdgeEnum.FALLEDGE:
         channel_number = -abs(channel_number)
+    measurementGroup = _TimeTagger.SynchronizedMeasurements(tagger)
     correlation = _TimeTagger.StartStop(
-        tagger=tagger,
+        tagger=measurementGroup.getTagger(),
         click_channel=channel_number,
         binwidth=5,  # Poner 1
     )
-    correlation.startFor(capture_duration=int(test_time))
-    correlation.waitUntilFinished()
+    if output_filename:
+        file_measurement = _TimeTagger.FileWriter(
+            measurementGroup.getTagger(), output_filename + '.ttbin',
+            [channel_number]
+            )
+    measurementGroup.startFor(capture_duration=int(test_time))
+    measurementGroup.waitUntilFinished()
     data = _np.array(list(zip(*correlation.getData())))
     delay, jitter_rms = _get_delay_and_jitter(data[0], data[1])
+    n_overflow = tagger.getOverflowsAndClear()
+    if n_overflow:
+        print("OVERFLOWS ON PERIOD CALIBRATION:", n_overflow)
     return (delay, data) if return_data else delay
 
 
@@ -86,6 +98,7 @@ def pulse_delay_calibration(
     laser_channel_type: SignalTypeEnum = SignalTypeEnum.NIM,
     APD_channel_type: SignalTypeEnum = SignalTypeEnum.TTL,
     debug: int = None,
+    output_filename: str = None,
 ):
     """Calibrate pulse delay.
 
@@ -105,10 +118,12 @@ def pulse_delay_calibration(
         Signal type expected on each channel.
     debug : int, optional
         DESCRIPTION. The default is None.
+    output_filename: str | None, optional
+        output fiilename.
 
     Returns
     -------
-    None.
+    data.
 
     """
     if debug:
@@ -121,16 +136,25 @@ def pulse_delay_calibration(
     tagger.setTriggerLevel(APD_channel, APD_channel_type.value.trigger_voltage)
     if APD_channel_type.value.sense is SignalEdgeEnum.FALLEDGE:
         APD_channel = -abs(APD_channel)
+    measurementGroup = _TimeTagger.SynchronizedMeasurements(tagger)
     correlation = _TimeTagger.StartStop(
-        tagger=tagger,
+        tagger=measurementGroup.getTagger(),
         click_channel=APD_channel,
         start_channel=laser_channel,
         binwidth=2,  # poner 1 ps_
     )
-    correlation.startFor(capture_duration=int(.5e12))
-    correlation.waitUntilFinished()
+    if output_filename:
+        file_measurement = _TimeTagger.FileWriter(
+            measurementGroup.getTagger(), output_filename + '.ttbin',
+            [laser_channel, APD_channel]
+            )
+    measurementGroup.startFor(capture_duration=int(.5e12))
+    measurementGroup.waitUntilFinished()
     bins = correlation.getData()
     data = _np.array(list(zip(*bins)))
+    n_overflow = tagger.getOverflowsAndClear()
+    if n_overflow:
+        print("OVERFLOWS ON PULSE CALIBRATION:", n_overflow)
     return data
 
 
